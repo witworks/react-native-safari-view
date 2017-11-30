@@ -13,7 +13,7 @@ RCT_EXPORT_MODULE()
 
 - (dispatch_queue_t)methodQueue
 {
-  return dispatch_get_main_queue();
+    return dispatch_get_main_queue();
 }
 
 - (void)startObserving
@@ -38,80 +38,83 @@ RCT_EXPORT_METHOD(show:(NSDictionary *)args resolver:(RCTPromiseResolveBlock)res
         reject(@"E_SAFARI_VIEW_NO_URL", @"You must specify a url.", nil);
         return;
     }
-
-    NSURL *url = [NSURL URLWithString:args[@"url"]];
+    
+    NSMutableString *tempStr = [NSMutableString stringWithString:args[@"url"]];
+    [tempStr replaceOccurrencesOfString:@" " withString:@"+" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [tempStr length])];
+    [tempStr replaceOccurrencesOfString:@"%09%09" withString:@"" options:NSCaseInsensitiveSearch range:NSMakeRange(0, [tempStr length])];
+    NSString *urlString = [[NSString stringWithFormat:@"%@",tempStr] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    NSURL *url = [NSURL URLWithString: urlString];
     BOOL readerMode = [args[@"readerMode"] boolValue];
     UIColor *tintColorString = args[@"tintColor"];
     UIColor *barTintColorString = args[@"barTintColor"];
     BOOL fromBottom = [args[@"fromBottom"] boolValue];
-
+    
     // Initialize the Safari View
-    self.safariView = [[SFSafariViewController alloc] initWithURL:url entersReaderIfAvailable:readerMode];
-    self.safariView.delegate = self;
-
+    _safariView = [[SFSafariViewController alloc] initWithURL:url entersReaderIfAvailable:readerMode];
+    _safariView.delegate = self;
+    
     // Set tintColor if available
     if (tintColorString) {
         UIColor *tintColor = [RCTConvert UIColor:tintColorString];
         if ([self.safariView respondsToSelector:@selector(setPreferredControlTintColor:)]) {
-            [self.safariView setPreferredControlTintColor:tintColor];
+            [_safariView setPreferredControlTintColor:tintColor];
         } else {
-            [self.safariView.view setTintColor:tintColor];
+            [_safariView.view setTintColor:tintColor];
         }
     }
-
+    
     // Set barTintColor if available
     if (barTintColorString) {
         UIColor *barTintColor = [RCTConvert UIColor:barTintColorString];
-        if ([self.safariView respondsToSelector:@selector(setPreferredBarTintColor:)]) {
-            [self.safariView setPreferredBarTintColor:barTintColor];
+        if ([_safariView respondsToSelector:@selector(setPreferredBarTintColor:)]) {
+            [_safariView setPreferredBarTintColor:barTintColor];
         }
     }
-
+    
     // Set modal transition style
     if (fromBottom) {
-        self.safariView.modalPresentationStyle = UIModalPresentationOverFullScreen;
+        _safariView.modalPresentationStyle = UIModalPresentationOverFullScreen;
     }
-
-    UIViewController *ctrl = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
-
+    
+    UIViewController *ctrl = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+    
     // Cycle through view controllers to get the view closest to the foreground
     while (ctrl.presentedViewController && !ctrl.isBeingDismissed) {
         ctrl = ctrl.presentedViewController;
     }
-
+    
     // Display the Safari View
-    [ctrl presentViewController:self.safariView animated:YES completion:nil];
-
+    [ctrl presentViewController: _safariView animated:YES completion:nil];
+    
     if (hasListeners) {
         [self sendEventWithName:@"SafariViewOnShow" body:nil];
     }
-
+    
     resolve(@YES);
 }
 
 RCT_EXPORT_METHOD(isAvailable:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 {
-    if ([SFSafariViewController class]) {
-        // SafariView is available
+    if (@available(iOS 9.0, *)) {
         resolve(@YES);
     } else {
         reject(@"E_SAFARI_VIEW_UNAVAILABLE", @"SafariView is unavailable", nil);
     }
 }
 
+
 RCT_EXPORT_METHOD(dismiss)
 {
-    [self safariViewControllerDidFinish:self.safariView];
+    [_safariView dismissViewControllerAnimated:true completion:nil];
 }
 
 -(void)safariViewControllerDidFinish:(nonnull SFSafariViewController *)controller
 {
-    [controller dismissViewControllerAnimated:true completion:nil];
+    _safariView = nil;
     NSLog(@"[SafariView] SafariView dismissed.");
-
     if (hasListeners) {
         [self sendEventWithName:@"SafariViewOnDismiss" body:nil];
     }
 }
-
 @end
+
